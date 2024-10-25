@@ -1,4 +1,4 @@
-name: GCS CI-CD
+name: sarc-scraper-ci-cd
 
 on:
   push:
@@ -11,12 +11,5 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-      - name: Login to DockerHub
-        env:
-          DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
-          DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
-        run: docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
-      - name: Build the Docker image
-        run: docker build -t sarc-scraper-ci-cd .
-      - name: Push to Dockerhub
-        run: docker push lucasarieta/gcs-sarc-scraper
+      - name: Build Docker image
+        run: docker build -t sarc-scraper-ci-cd:latest .
