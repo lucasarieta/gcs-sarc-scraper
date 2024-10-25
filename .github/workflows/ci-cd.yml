@@ -59,6 +59,19 @@ jobs:
           USER: ec2-user
         run: |
           ssh -o StrictHostKeyChecking=no -i private_key ${USER}@${HOST} '
+            # Install Docker if not present
+            if ! command -v docker &> /dev/null; then
+              sudo yum update -y
+              sudo yum install -y docker
+              sudo service docker start
+              sudo usermod -a -G docker ec2-user
+              sudo chkconfig docker on
+            fi
+
+            # Reload the shell to apply group changes
+            exec sudo su -l $USER
+
+            # Now proceed with Docker commands
             docker load < sarc-scraper.tar
             docker stop sarc-scraper-ci-cd || true
             docker rm sarc-scraper-ci-cd || true
