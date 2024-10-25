@@ -37,25 +37,20 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
+      - name: Build Docker image
+        run: docker build -t sarc-scraper:latest .
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+      - name: Save Docker image
+        run: docker save sarc-scraper:latest > sarc-scraper.tar
 
-      - name: Build, tag, and push image to Amazon ECR
+      - name: Copy Docker image to EC2
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: sarc-scraper-ci-cd
-          IMAGE_TAG: ${{ github.sha }}
+          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          HOST: ec2-18-217-171-64.us-east-2.compute.amazonaws.com
+          USER: ec2-user
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
+          scp -o StrictHostKeyChecking=no -i private_key sarc-scraper.tar ${USER}@${HOST}:~
 
       - name: Deploy to EC2
         env:
@@ -63,11 +58,10 @@ jobs:
           HOST: ec2-18-217-171-64.us-east-2.compute.amazonaws.com
           USER: ec2-user
         run: |
-          echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
           ssh -o StrictHostKeyChecking=no -i private_key ${USER}@${HOST} '
-            aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
-            docker pull ${{ steps.login-ecr.outputs.registry }}/sarc-scraper-ci-cd:${{ github.sha }}
+            docker load < sarc-scraper.tar
             docker stop sarc-scraper-ci-cd || true
             docker rm sarc-scraper-ci-cd || true
-            docker run -d --name sarc-scraper-ci-cd -p 8080:8080 ${{ steps.login-ecr.outputs.registry }}/sarc-scraper:${{ github.sha }}
+            docker run -d --name sarc-scraper-ci-cd -p 8080:8080 sarc-scraper:latest
+            rm sarc-scraper.tar
           '
